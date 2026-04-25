@@ -1,6 +1,6 @@
 # terminal-init
 
-A single-file Bash script that sets up a Debian/Ubuntu terminal environment from scratch.
+A single-file Bash CLI that sets up a Debian/Ubuntu terminal environment from scratch.
 
 Run once on a fresh machine to get a fully configured zsh shell with a curated set of tools and plugins.
 
@@ -15,17 +15,50 @@ Run once on a fresh machine to get a fully configured zsh shell with a curated s
 - **[motd](https://github.com/milvasic/motd)** — message of the day on shell login
 - **[mcli](https://github.com/milvasic/mcli)** — Docker Compose service manager
 
-## Usage
+## Install
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/init.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)"
 ```
 
-The script is idempotent — it skips steps that are already done and backs up existing config files before overwriting them.
+This places the `terminal-init` binary in `/usr/local/bin`.
 
-After the script completes, restart your terminal or log out and back in to activate zsh.
+## Usage
+
+### First-time setup
+
+```sh
+terminal-init ensure-tools
+```
+
+Installs all packages, oh-my-zsh, sets zsh as the default shell, writes config files, and installs motd and mcli.
+
+### Update config files only
+
+```sh
+terminal-init update
+```
+
+Re-writes `~/.zshrc` and `~/.config/.spaceshiprc.zsh` (backs up existing files first). Safe to re-run at any time.
+
+### Self-update the binary
+
+```sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)" -- --yes
+```
+
+### Other commands
+
+```sh
+terminal-init version   # print version
+terminal-init help      # show usage
+```
+
+Both commands are idempotent — steps already done are skipped, and existing config files are backed up before overwriting.
+
+After running `ensure-tools`, restart your terminal or log out and back in to activate zsh.
 
 ## Requirements
 
 - Debian or Ubuntu (requires `apt`)
-- `curl` or `wget` for the one-liner above (the script installs `curl` itself if run another way)
+- `curl` for the install one-liner
