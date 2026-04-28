@@ -18,7 +18,7 @@ Run once on a fresh machine to get a fully configured zsh shell with a curated s
 ## Install
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)"
 ```
 
 This places the `terminal-init` binary in `/usr/local/bin`.
@@ -36,7 +36,7 @@ Installs all packages, oh-my-zsh, sets zsh as the default shell, writes config f
 ### Update config files only
 
 ```sh
-terminal-init update
+terminal-init ensure-config
 ```
 
 Re-writes `~/.zshrc` and `~/.config/.spaceshiprc.zsh` (backs up existing files first). Safe to re-run at any time.
@@ -44,7 +44,7 @@ Re-writes `~/.zshrc` and `~/.config/.spaceshiprc.zsh` (backs up existing files f
 ### Self-update the binary
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)" -- --yes
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh)" -- --yes
 ```
 
 ### Other commands

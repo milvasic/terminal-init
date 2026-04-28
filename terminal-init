@@ -1,36 +1,113 @@
 #!/usr/bin/env bash
+# terminal-init — first-time terminal environment setup for Debian/Ubuntu
+# https://github.com/milvasic/terminal-init
 
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 
-# Verify apt is available (Debian/Ubuntu only)
-if ! command -v apt >/dev/null 2>&1; then
-	echo "[ERROR] This script requires apt. Debian/Ubuntu only." >&2
+# ── Help ──────────────────────────────────────────────────────────────────────
+help() {
+	colorize >&2 <<'EOF'
+A single-file Bash CLI for first-time terminal environment setup on Debian/Ubuntu.
+
+Usage:
+  terminal-init <command>
+
+Commands:
+  ensure-tools              # Full first-time setup (packages, OMZ/Zinit, zsh, configs)
+  ensure-config             # Re-write config files only (.zshrc, .spaceshiprc.zsh)
+  update                    # Update terminal-init to the latest version
+  version, --version, -v    # Print version
+  help, --help, -h          # Show this message
+
+Description:
+  On first run, 'ensure-tools' will:
+  1. Install base packages (curl, git, zsh, ncdu)
+  2. Install oh-my-zsh and Zinit plugin manager
+  3. Set zsh as the default shell
+  4. Configure ~/.zshrc with plugins and prompt theme
+  5. Configure ~/.config/.spaceshiprc.zsh for Spaceship prompt
+  6. Install motd for system dashboard at login
+  7. Install mcli for service management
+
+  'ensure-config' can be run later to regenerate config files without re-installing packages.
+
+  After running, restart your terminal or log out/in to activate zsh.
+EOF
 	exit 1
+}
+
+# ── Colors & logging ──────────────────────────────────────────────────────────
+if [ -t 1 ]; then
+	RED=$'\033[0;31m'
+	GREEN=$'\033[0;32m'
+	YELLOW=$'\033[0;33m'
+	CYAN=$'\033[0;36m'
+	BOLD=$'\033[1m'
+	RESET=$'\033[0m'
+else
+	RED=""
+	GREEN=""
+	YELLOW=""
+	CYAN=""
+	BOLD=""
+	RESET=""
 fi
 
-# Trap errors per command without stopping the whole script
-report_error() {
-	echo -e "\n[ERROR] $1 failed. Continuing...\n"
+log() { printf "\n${BOLD}=== %s ===${RESET}\n" "$1" >&2; }
+error() { printf "${RED}ERROR:${RESET} %s\n" "$1" >&2; }
+ok() { printf "${GREEN}%s${RESET}\n" "$1"; }
+info() { printf "${CYAN}%s${RESET}\n" "$1"; }
+skip() { printf "${YELLOW}[skip]${RESET} %s\n" "$1"; }
+step() { printf "${BOLD}[step]${RESET} %s\n" "$1"; }
+
+# ── Help colorizer ────────────────────────────────────────────────────────────
+colorize_line() {
+	sed \
+		-e "s/\\(^\\|[^[:alnum:]_'-]\\)\\(terminal-init\\)\\([^[:alnum:]_'-]\\|$\\)/\\1${GREEN}\\2${RESET}\\3/g" \
+		-e "s/\\(^\\|[^[:alnum:]_'-]\\)\\(ensure-tools\\|ensure-config\\|update\\|version\\|help\\)\\([^[:alnum:]_'-]\\|$\\)/\\1${YELLOW}\\2${RESET}\\3/g" \
+		-e "s/--[a-z][a-z-]*/${CYAN}&${RESET}/g" \
+		-e "s/\([ ,]\)\(-[a-z]\)/\\1${CYAN}\\2${RESET}/g"
 }
+
+colorize() {
+	local line pre post
+	while IFS= read -r line; do
+		if [[ "$line" == *'#'* ]]; then
+			pre="${line%%#*}"
+			post="${line#*#}"
+			pre="$(printf '%s' "$pre" | colorize_line)"
+			printf '%s%s#%s%s\n' "$pre" "$GREEN" "$post" "$RESET"
+		else
+			printf '%s\n' "$line" | colorize_line
+		fi
+	done
+}
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+report_error() {
+	error "$1 failed. Continuing..."
+}
+
+# ── Prerequisite check ────────────────────────────────────────────────────────
+if ! command -v apt >/dev/null 2>&1; then
+	error "This script requires apt. Debian/Ubuntu only."
+	exit 1
+fi
 
 USER_HOME="$HOME"
 ZSHRC="$USER_HOME/.zshrc"
 SPACESHIP_CFG="$USER_HOME/.config/.spaceshiprc.zsh"
 
-# ---------------------------------------------------------------------
-# update: re-write config files only (steps 4 & 5)
-# ---------------------------------------------------------------------
-update() {
-	# ------------------------------------------------------------------
-	# 4. Write .zshrc
-	# ------------------------------------------------------------------
-	echo "[STEP] Creating ~/.zshrc ..."
+# ── ensure-config ─────────────────────────────────────────────────────────────
+ensure_config() {
+	# ── Write .zshrc ──────────────────────────────────────────────────────────
+	step "Creating ~/.zshrc ..."
 
 	if [ -f "$ZSHRC" ]; then
 		cp "$ZSHRC" "${ZSHRC}.bak"
-		echo "[INFO] Backed up existing .zshrc to ${ZSHRC}.bak"
+		info "Backed up existing .zshrc to ${ZSHRC}.bak"
 	fi
 
 	if cat >"$ZSHRC" <<'EOF'; then
@@ -38,17 +115,17 @@ export ZSH="$HOME/.oh-my-zsh"
 export PATH=/usr/sbin:$PATH
 export ZSH_COMPDUMP=$ZSH/cache/.zcompdump-$HOST
 export SPACESHIP_CONFIG="$HOME/.config/.spaceshiprc.zsh"
- 
+
 # export NVM_DIR="$HOME/.nvm"
 # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
- 
+
 # alias python="python3"
 ZSH_THEME=""
 plugins=(git docker docker-compose)
- 
+
 source $ZSH/oh-my-zsh.sh
- 
+
 ### Added by Zinit's installer
 if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
     print -P "%F{33} %F{220}Installing %F{33}ZDHARMA-CONTINUUM%F{220} Plugin Manager …%f"
@@ -57,22 +134,22 @@ if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
         print -P "%F{33} %F{34}Installation successful.%f%b" || \
         print -P "%F{160} The clone has failed.%f%b"
 fi
- 
+
 source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
 autoload -Uz _zinit
 (( ${+_comps} )) && _comps[zinit]=_zinit
- 
+
 zinit light-mode for \
     zdharma-continuum/zinit-annex-as-monitor \
     zdharma-continuum/zinit-annex-bin-gem-node \
     zdharma-continuum/zinit-annex-patch-dl \
     zdharma-continuum/zinit-annex-rust
- 
+
 zinit light spaceship-prompt/spaceship-prompt
 zinit light zdharma-continuum/fast-syntax-highlighting
 zinit light zsh-users/zsh-autosuggestions
 zinit light zsh-users/zsh-completions
- 
+
 alias clear-shell-history="echo '' > ~/.zsh_history"
 alias clear-journal="sudo journalctl --rotate && sudo journalctl --vacuum-time=1s"
 alias disk-usage="cd / && sudo ncdu && cd - > /dev/null"
@@ -82,21 +159,19 @@ alias listen-ports="sudo lsof -i -P -n | grep LISTEN"
 
 command -v motd >/dev/null && motd
 EOF
-		echo "[OK] .zshrc created."
+		ok ".zshrc created."
 	else
 		report_error ".zshrc creation"
 	fi
 
-	# ------------------------------------------------------------------
-	# 5. Create ~/.config/.spaceshiprc.zsh
-	# ------------------------------------------------------------------
-	echo "[STEP] Creating spaceship configuration..."
+	# ── Create ~/.config/.spaceshiprc.zsh ──────────────────────────────────────
+	step "Creating spaceship configuration..."
 
 	mkdir -p "$USER_HOME/.config"
 
 	if [ -f "$SPACESHIP_CFG" ]; then
 		cp "$SPACESHIP_CFG" "${SPACESHIP_CFG}.bak"
-		echo "[INFO] Backed up existing .spaceshiprc.zsh to ${SPACESHIP_CFG}.bak"
+		info "Backed up existing .spaceshiprc.zsh to ${SPACESHIP_CFG}.bak"
 	fi
 
 	if cat >"$SPACESHIP_CFG" <<'EOF'; then
@@ -104,7 +179,7 @@ SPACESHIP_USER_SHOW=always
 SPACESHIP_HOST_SHOW=always
 SPACESHIP_TIME_SHOW=true
 SPACESHIP_CHAR_SYMBOL_ROOT="# "
- 
+
 SPACESHIP_HG_SHOW=false
 SPACESHIP_HG_BRANCH_SHOW=false
 SPACESHIP_HG_STATUS_SHOW=false
@@ -131,25 +206,21 @@ SPACESHIP_BATTERY_SHOW=false
 SPACESHIP_VI_MODE_SHOW=false
 SPACESHIP_JOBS_SHOW=false
 SPACESHIP_EXIT_CODE_SHOW=false
- 
+
 SPACESHIP_PROMPT_ORDER=(host time user dir git node dotnet docker exec_time char)
 EOF
-		echo "[OK] Spaceship config created."
+		ok "Spaceship config created."
 	else
 		report_error "spaceship config creation"
 	fi
 }
 
-# ---------------------------------------------------------------------
-# ensure_tools: full first-time setup
-# ---------------------------------------------------------------------
+# ── ensure-tools ──────────────────────────────────────────────────────────────
 ensure_tools() {
-	echo "=== terminal-init ensure_tools ==="
+	log "terminal-init ensure-tools"
 
-	# ------------------------------------------------------------------
-	# 1. Install required packages
-	# ------------------------------------------------------------------
-	echo "[STEP] Checking base packages (curl git zsh ncdu)..."
+	# ── Install required packages ─────────────────────────────────────────────
+	step "Checking base packages (curl git zsh ncdu)..."
 
 	missing_pkgs=""
 	command -v curl >/dev/null 2>&1 || missing_pkgs="$missing_pkgs curl"
@@ -158,95 +229,102 @@ ensure_tools() {
 	command -v ncdu >/dev/null 2>&1 || missing_pkgs="$missing_pkgs ncdu"
 
 	if [ -n "$missing_pkgs" ]; then
-		echo "[INFO] Missing packages:$missing_pkgs"
+		info "Missing packages:$missing_pkgs"
 		if sudo apt update && sudo apt install -y $missing_pkgs; then
-			echo "[OK] Packages installed."
+			ok "Packages installed."
 		else
 			report_error "Package installation"
 		fi
 	else
-		echo "[SKIP] All base packages already installed."
+		skip "All base packages already installed."
 	fi
 
-	# ------------------------------------------------------------------
-	# 2. Install oh-my-zsh
-	# ------------------------------------------------------------------
-	echo "[STEP] Installing oh-my-zsh..."
+	# ── Install oh-my-zsh ─────────────────────────────────────────────────────
+	step "Installing oh-my-zsh..."
 
 	if [ -d "$HOME/.oh-my-zsh" ]; then
-		echo "[SKIP] oh-my-zsh already installed."
+		skip "oh-my-zsh already installed."
 	elif RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"; then
-		echo "[OK] oh-my-zsh installed."
+		ok "oh-my-zsh installed."
 	else
 		report_error "oh-my-zsh installation"
 	fi
 
-	# ------------------------------------------------------------------
-	# 3. Set ZSH as default shell
-	# ------------------------------------------------------------------
-	echo "[STEP] Setting zsh as default shell..."
+	# ── Set zsh as default shell ──────────────────────────────────────────────
+	step "Setting zsh as default shell..."
 
 	if [ "$SHELL" = "$(command -v zsh)" ]; then
-		echo "[SKIP] zsh is already the default shell."
+		skip "zsh is already the default shell."
 	elif chsh -s "$(command -v zsh)"; then
-		echo "[OK] Shell changed to zsh."
+		ok "Shell changed to zsh."
 	else
 		report_error "chsh command"
 	fi
 
-	# ------------------------------------------------------------------
-	# 4 & 5. Write config files
-	# ------------------------------------------------------------------
-	update
+	# ── Write config files ────────────────────────────────────────────────────
+	ensure_config
 
-	# ------------------------------------------------------------------
-	# 6. Install motd
-	# ------------------------------------------------------------------
-	echo "[STEP] Installing motd..."
+	# ── Install motd ──────────────────────────────────────────────────────────
+	step "Installing motd..."
 
 	if command -v motd >/dev/null 2>&1; then
-		echo "[SKIP] motd already installed."
-	elif sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/motd/refs/heads/main/install.sh)" -- --yes; then
-		echo "[OK] motd installed."
+		skip "motd already installed."
+	elif bash -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/motd/refs/heads/main/install.sh)" -- --yes; then
+		ok "motd installed."
 	else
 		report_error "motd installation"
 	fi
 
-	# ------------------------------------------------------------------
-	# 7. Install mcli
-	# ------------------------------------------------------------------
-	echo "[STEP] Installing mcli..."
+	# ── Install mcli ──────────────────────────────────────────────────────────
+	step "Installing mcli..."
 
 	if command -v mcli >/dev/null 2>&1; then
-		echo "[SKIP] mcli already installed."
-	elif sh -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/mcli/refs/heads/main/install.sh)" -- --yes; then
-		echo "[OK] mcli installed."
+		skip "mcli already installed."
+	elif bash -c "$(curl -fsSL https://raw.githubusercontent.com/milvasic/mcli/refs/heads/main/install.sh)" -- --yes; then
+		ok "mcli installed."
 	else
 		report_error "mcli installation"
 	fi
 
-	echo -e "\n=== Installation complete ==="
-	echo "Restart your terminal or log out/in to activate zsh."
+	log "Installation complete"
+	ok "Restart your terminal or log out/in to activate zsh."
 }
 
-usage() {
-	cat <<'EOF'
-Usage: terminal-init <command>
-
-Commands:
-  ensure-tools  Full first-time setup (packages, OMZ/Zinit, shell, configs)
-  update         Re-write ~/.zshrc and ~/.config/.spaceshiprc.zsh only
-  version     Print version
-  help        Show usage
-EOF
+# ── Update command ────────────────────────────────────────────────────────────
+INSTALLER_SELF_URL="https://raw.githubusercontent.com/milvasic/terminal-init/refs/heads/main/install.sh"
+update() {
+	if command -v curl >/dev/null 2>&1; then
+		bash -c "$(curl -fsSL "${INSTALLER_SELF_URL}")" -- --yes
+	elif command -v wget >/dev/null 2>&1; then
+		bash -c "$(wget -qO- "${INSTALLER_SELF_URL}")" -- --yes
+	else
+		error "Neither curl nor wget found. Please install one and try again."
+		exit 1
+	fi
 }
 
-case "${1:-help}" in
-ensure-tools) ensure_tools ;;
-update) update ;;
-version | -v) echo "terminal-init $VERSION" ;;
-help | -h | *)
-	usage
-	exit 1
+# ── Main dispatch ─────────────────────────────────────────────────────────────
+COMMAND="${1:-}"
+[ $# -ge 1 ] && shift
+
+case "$COMMAND" in
+ensure-tools)
+	ensure_tools
+	;;
+ensure-config)
+	ensure_config
+	;;
+update)
+	update
+	;;
+version | --version | -v)
+	echo "${VERSION}"
+	;;
+help | --help | -h)
+	help
+	;;
+*)
+	error "Unknown command: ${COMMAND:-<none>}"
+	help
 	;;
 esac
